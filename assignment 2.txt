@@ -1,0 +1,152 @@
+# Simulator.py
+
+# TODO: Import required libraries (pandas, os, datetime, etc.)
+import pandas as pd
+import os
+
+# TODO: Import your Strategy class and config module
+# from Strategy import Strategy
+# import config
+
+class Simulator:
+    def __init__(self, configFilePath=None):
+        # TODO: Initialize:
+        # - startDate and endDate from config
+        # - symbol list from config
+        # - empty dataframe to hold merged price data
+        # - dictionaries to track:
+        #   - currentPrice per symbol
+        #   - net quantity per symbol
+        #   - total buy/sell value per symbol
+        # - slippage constant (e.g., 0.0001)
+        # - create Strategy object, passing this Simulator
+        # Then call:
+        # - self.readData()
+        # - self.startSimulation()
+
+        self.startDate = "2024-06-01"
+        self.endDate = "2024-06-30"
+        self.symbols = ["BTC"]
+        self.df = pd.DataFrame()
+        
+        self.currentPrice = {}
+        self.currQuantity = {}
+        self.buyValue = {}
+        self.sellValue = {}
+
+        self.slippage = 0.0001
+        # self.strategy = Strategy(self)
+
+        self.readData()
+        self.startSimulation()
+
+    def parse_timestamp_to_seconds(self, ts):
+        try:
+            minutes, seconds = ts.split(":")
+            return int(minutes) * 60 + float(seconds)
+        except Exception as e:
+            print(f"Error parsing timestamp '{ts}': {e}")
+            return 0.0
+
+    def readData(self):
+        # TODO:
+        # - Loop through each date from startDate to endDate
+        # - For each symbol and date:
+        #   - Load CSV file from appropriate folder
+        #   - Add "Symbol" column to the DataFrame
+        # - Concatenate all DataFrames
+        # - Sort the final DataFrame by timestamp
+        # - Store the result in self.df
+
+        try:
+            file_name = "options_BTC_2024_06.csv"
+            # file_path = os.path.join(os.getcwd(), file_name)
+            df = pd.read_csv(file_name)
+
+            if "time" not in df.columns:
+                raise ValueError("CSV must contain a 'time' column")
+
+            df["total_seconds"] = df["time"].apply(self.parse_timestamp_to_seconds)
+            df["Symbol"] = "BTC"
+
+            self.df = df.sort_values("total_seconds").reset_index(drop=True)
+            print("[INFO] Data loaded and parsed successfully.\n", self.df.head())
+        except Exception as e:
+            print(f"[ERROR] Failed to load data: {e}")
+            self.df = pd.DataFrame()
+
+    def startSimulation(self):
+        # TODO:
+        # - Loop through each row of self.df (sorted by time)
+        # - Update self.currentPrice for that symbol
+        # - Call strategy.onMarketData(row)
+        # - Optionally print or record current PnL using self.printPnl()
+        # if self.df.empty:
+        #     print("[WARNING] No data available for simulation")
+        #     return
+        
+        print("[STARTING SIMULATION]")
+
+        for _, row in self.df.iterrows():
+            symbol = row["Symbol"]
+            price = row.get("price", None)
+
+            if pd.isna(price):
+                continue
+
+            self.currentPrice[symbol] = price
+            # self.strategy.onMarketData(row)
+
+        print("[SIMULATION COMPLETE]")
+
+    def onOrder(self, symbol, side, quantity, price):
+        # TODO:
+        # - Simulate slippage:
+        #     - Buy: price * (1 + slippage)
+        #     - Sell: price * (1 - slippage)
+        # - Calculate trade value
+        # - Update:
+        #     - currQuantity[symbol]
+        #     - buyValue or sellValue for the symbol
+        # - Call strategy.onTradeConfirmation(...) with the trade details
+
+        if side == "BUY":
+            exec_price = price * (1 + self.slippage)
+            self.buyValue[symbol] = self.buyValue.get(symbol, 0) + exec_price * quantity
+            self.currQuantity[symbol] = self.currQuantity.get(symbol, 0) + quantity
+        elif side == "SELL":
+            exec_price = price * (1 - self.slippage)
+            self.sellValue[symbol] = self.sellValue.get(symbol, 0) + exec_price * quantity
+            self.currQuantity[symbol] = self.currQuantity.get(symbol, 0) - quantity
+        
+        # self.strategy.onTradeConfirmation(symbol, side, quantity, exec_price)
+
+    def printPnl(self):
+        # TODO:
+        # - For each traded symbol:
+        #     - Compute realized PnL: sell - buy
+        #     - Add unrealized PnL: current quantity * latest price
+        # - Sum across all symbols
+        # - Print or store the final PnL
+
+        total_pnl = 0
+        print("\n--- Final Position Report ---")
+        for symbol in self.symbols:
+            buy = self.buyValue.get(symbol, 0)
+            sell = self.sellValue.get(symbol, 0)
+            qty = self.currQuantity.get(symbol, 0)
+            price = self.currentPrice.get(symbol, 0)
+
+            realized = sell - buy
+            unrealized = qty * price
+            pnl = realized + unrealized
+            total_pnl += pnl
+
+            print(f"{symbol} -> Realized: {realized:.2f}, Unrealized: {unrealized:.2f}, Total: {pnl:.2f}")
+
+        print(f"\nTotal PnL: {total_pnl:.2f}")
+
+# TODO (Optional): Add if __name__ == "__main__" block
+# - Instantiate Simulator and run it
+if __name__ == "__main__":
+    sim = Simulator()
